@@ -31,4 +31,8 @@ pub mod file_info;
 #[cfg(target_os = "macos")]
 pub mod net_info;
 
+/// Get information about fileport
+#[cfg(target_os="macos")]
+pub mod fileport;
+
 mod helpers;
