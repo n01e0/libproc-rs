@@ -89,6 +89,8 @@ pub enum PidInfoFlavor {
     PathInfo = 11,
     /// struct proc_workqueueinfo
     WorkQueueInfo = 12,
+    /// struct proc_fileportinfo
+    ListFilePorts = 14,
 }
 
 /// The `PidInfo` enum contains a piece of information about a processes
@@ -122,6 +124,9 @@ pub enum PidInfo {
     PathInfo(String),
     /// WorkQueueInfo
     WorkQueueInfo(WorkQueueInfo),
+    /// A list of Fileport info
+    #[cfg(target_os = "macos")]
+    ListFilePorts(Vec<FilePortInfo>),
 }
 
 /// The `ListPIDInfo` trait is needed for polymorphism on listpidinfo types, also abstracting flavor in order to provide
@@ -141,6 +146,25 @@ impl ListPIDInfo for ListThreads {
     fn flavor() -> PidInfoFlavor {
         PidInfoFlavor::ListThreads
     }
+}
+
+/// Struct for List of Fileports
+pub struct ListFilePorts;
+
+impl ListPIDInfo for ListFilePorts {
+    type Item = *mut FilePortInfo;
+    fn flavor() -> PidInfoFlavor {
+        PidInfoFlavor::ListFilePorts
+    }
+}
+
+/// Struct fileportinfo
+#[repr(C)]
+pub struct FilePortInfo {
+    /// fileport
+    pub proc_fileport: u32,
+    /// fdtype
+    pub proc_fdtype: u32,
 }
 
 /// Returns the PIDs of the active processes that match the ProcType passed in
