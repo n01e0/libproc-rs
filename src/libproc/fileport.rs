@@ -30,6 +30,18 @@ impl PIDFilePortInfo for osx_libproc_bindings::vnode_fdinfowithpath {
     fn flavor() -> PidFilePortInfoFlavor { PidFilePortInfoFlavor::Vnode }
 }
 
+impl PIDFilePortInfo for osx_libproc_bindings::pipe_fdinfo {
+    fn flavor() -> PidFilePortInfoFlavor { PidFilePortInfoFlavor::Pipe }
+}
+
+impl PIDFilePortInfo for osx_libproc_bindings::pshm_fdinfo {
+    fn flavor() -> PidFilePortInfoFlavor { PidFilePortInfoFlavor::Shm }
+}
+
+impl PIDFilePortInfo for osx_libproc_bindings::socket_fdinfo {
+    fn flavor() -> PidFilePortInfoFlavor { PidFilePortInfoFlavor::Socket }
+}
+
 /// Get fileport info
 pub fn pidfileportinfo<T: PIDFilePortInfo>(pid: i32, fileport: u32) -> Result<T, String> {
     let flavor = T::flavor() as i32;
