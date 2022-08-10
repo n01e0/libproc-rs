@@ -4,11 +4,85 @@ use std::mem;
 
 use crate::libproc::helpers;
 use crate::libproc::proc_pid::{ListPIDInfo, PidInfoFlavor};
+use crate::libproc::net_info::{ProcFileInfo, VInfoStat};
 
 #[cfg(target_os = "macos")]
 use self::libc::c_void;
 #[cfg(target_os = "macos")]
 use crate::osx_libproc_bindings::proc_pidfdinfo;
+
+/// The `FDType`
+pub enum FDType {
+    /// vnode
+    VNode = 1,
+    /// socket
+    Sockt = 2,
+    /// pshm
+    PSHM = 3,
+    /// psem
+    PSEM = 4,
+    /// kqueue
+    KQueue = 5,
+    /// pipe
+    Pipe = 6,
+    /// fsevents
+    FSEvents = 7,
+    /// netpolicy
+    NetPolicy = 9,
+    /// channel
+    Channel = 10,
+    /// nexus
+    Nexus = 11,
+}
+
+/// vnode_fdinfowithpath
+#[derive(Default)]
+#[repr(C)]
+pub struct VNodeFdInfoWithPath {
+    /// Proc File Info
+    pub pfi: ProcFileInfo,
+    /// Vnode Info Path
+    pub pvip: VNodeInfoPath,
+}
+
+/// vnode_info_path
+#[derive(Default)]
+#[repr(C)]
+pub struct VNodeInfoPath {
+    /// vnode_info
+    pub vip_vi: VNodeInfo,
+    /// vnode into path
+    pub vip_path: [[libc::c_char; 32]; 32],
+}
+
+/// vnode info
+#[derive(Default)]
+#[repr(C)]
+pub struct VNodeInfo {
+    /// vinfo stat
+    pub vi_stat: VInfoStat,
+    /// vinfo type
+    pub vi_type: i32,
+    /// vinfo pad
+    pub vi_pad: i32,
+    /// vinfo fsid
+    pub vi_fsid: FsId,
+}
+
+/// fsid_t
+#[derive(Default)]
+#[repr(C)]
+pub struct FsId {
+    /// value
+    pub val: [i32; 2]
+}
+
+/// pidfdinfo for vnode_fdinfowithpath
+impl PIDFDInfo for VNodeFdInfoWithPath {
+    fn flavor() -> PIDFDInfoFlavor {
+        PIDFDInfoFlavor::VNodePathInfo
+    }
+}
 
 /// Flavor of Pid FileDescriptor info for different types of File Descriptors
 pub enum PIDFDInfoFlavor {

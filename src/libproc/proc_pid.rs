@@ -89,8 +89,6 @@ pub enum PidInfoFlavor {
     PathInfo = 11,
     /// struct proc_workqueueinfo
     WorkQueueInfo = 12,
-    /// struct proc_fileportinfo
-    ListFilePorts = 14,
 }
 
 /// The `PidInfo` enum contains a piece of information about a processes
@@ -129,6 +127,30 @@ pub enum PidInfo {
     ListFilePorts(Vec<FilePortInfo>),
 }
 
+/// The `FDType`
+pub enum FDType {
+    /// vnode
+    VNode = 1,
+    /// socket
+    Sockt = 2,
+    /// pshm
+    PSHM = 3,
+    /// psem
+    PSEM = 4,
+    /// kqueue
+    KQueue = 5,
+    /// pipe
+    Pipe = 6,
+    /// fsevents
+    FSEvents = 7,
+    /// netpolicy
+    NetPolicy = 9,
+    /// channel
+    Channel = 10,
+    /// nexus
+    Nexus = 11,
+}
+
 /// The `ListPIDInfo` trait is needed for polymorphism on listpidinfo types, also abstracting flavor in order to provide
 /// type-guaranteed flavor correctness
 pub trait ListPIDInfo {
@@ -149,14 +171,15 @@ impl ListPIDInfo for ListThreads {
 }
 
 /// Struct for List of Fileports
-pub struct ListFilePorts;
-
-impl ListPIDInfo for ListFilePorts {
-    type Item = *mut FilePortInfo;
-    fn flavor() -> PidInfoFlavor {
-        PidInfoFlavor::ListFilePorts
-    }
-}
+//pub struct ListFilePorts;
+//
+//impl ListPIDInfo for ListFilePorts {
+//    //type Item = *mut FilePortInfo;
+//    type Item = *mut c_void;
+//    fn flavor() -> PidInfoFlavor {
+//        PidInfoFlavor::ListFilePorts
+//    }
+//}
 
 /// Struct fileportinfo
 #[repr(C)]
