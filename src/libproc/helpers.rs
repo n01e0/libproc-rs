@@ -1,4 +1,5 @@
 use crate::errno::errno;
+use anyhow::Result;
 #[cfg(target_os = "linux")]
 use std::fs::File;
 #[cfg(target_os = "linux")]
@@ -15,18 +16,15 @@ pub fn get_errno_with_message(return_code: i32) -> String {
 /// Helper function that depending on the `ret` value:
 /// - is negative or 0, then form an error message from the `errno` value
 /// - is positive, take `ret` as the length of the success message in `buf` in bytes
-pub fn check_errno(ret: i32, buf: &mut Vec<u8>) -> Result<String, String> {
+pub fn check_errno(ret: i32, buf: &mut Vec<u8>) -> Result<String> {
     if ret <= 0 {
-        Err(get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         unsafe {
             buf.set_len(ret as usize);
         }
 
-        match String::from_utf8(buf.to_vec()) {
-            Ok(return_value) => Ok(return_value),
-            Err(e) => Err(format!("Invalid UTF-8 sequence: {}", e))
-        }
+        String::from_utf8(buf.to_vec()).map_err(|e| e.into())
     }
 }
 

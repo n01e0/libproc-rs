@@ -1,6 +1,9 @@
 extern crate libc;
 
 use std::env;
+use crate::errno::errno;
+use super::error::LibProcError;
+use anyhow::{Context, Result};
 #[cfg(target_os = "linux")]
 use std::ffi::CString;
 #[cfg(target_os = "linux")]
@@ -89,8 +92,6 @@ pub enum PidInfoFlavor {
     PathInfo = 11,
     /// struct proc_workqueueinfo
     WorkQueueInfo = 12,
-    /// struct proc_fileportinfo
-    ListFilePorts = 14,
 }
 
 /// The `PidInfo` enum contains a piece of information about a processes
@@ -129,6 +130,30 @@ pub enum PidInfo {
     ListFilePorts(Vec<FilePortInfo>),
 }
 
+/// The `FDType`
+pub enum FDType {
+    /// vnode
+    VNode = 1,
+    /// socket
+    Sockt = 2,
+    /// pshm
+    PSHM = 3,
+    /// psem
+    PSEM = 4,
+    /// kqueue
+    KQueue = 5,
+    /// pipe
+    Pipe = 6,
+    /// fsevents
+    FSEvents = 7,
+    /// netpolicy
+    NetPolicy = 9,
+    /// channel
+    Channel = 10,
+    /// nexus
+    Nexus = 11,
+}
+
 /// The `ListPIDInfo` trait is needed for polymorphism on listpidinfo types, also abstracting flavor in order to provide
 /// type-guaranteed flavor correctness
 pub trait ListPIDInfo {
@@ -145,16 +170,6 @@ impl ListPIDInfo for ListThreads {
     type Item = u64;
     fn flavor() -> PidInfoFlavor {
         PidInfoFlavor::ListThreads
-    }
-}
-
-/// Struct for List of Fileports
-pub struct ListFilePorts;
-
-impl ListPIDInfo for ListFilePorts {
-    type Item = *mut FilePortInfo;
-    fn flavor() -> PidInfoFlavor {
-        PidInfoFlavor::ListFilePorts
     }
 }
 
@@ -182,10 +197,10 @@ pub struct FilePortInfo {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>, String> {
+pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>> {
     let buffer_size = unsafe { proc_listpids(proc_types as u32, 0, ptr::null_mut(), 0) };
     if buffer_size <= 0 {
-        return Err(helpers::get_errno_with_message(buffer_size));
+        return Err(LibProcError::from(errno()).into());
     }
 
     let capacity = buffer_size as usize / mem::size_of::<u32>();
@@ -195,7 +210,7 @@ pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>, String> {
     let ret = unsafe { proc_listpids(proc_types as u32, 0, buffer_ptr, buffer_size as i32) };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         let items_count = ret as usize / mem::size_of::<u32>() - 1;
         unsafe {
@@ -221,15 +236,15 @@ pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>, String> {
 /// }
 /// ```
 #[cfg(target_os = "linux")]
-pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>, String> {
+pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>> {
     match proc_types {
         ProcType::ProcAllPIDS => {
             let mut pids = Vec::<u32>::new();
 
-            let proc_dir = fs::read_dir("/proc").map_err(|e| format!("Could not read '/proc': {}", e))?;
+            let proc_dir = fs::read_dir("/proc").map_err(|e| LibProcError::CantReadProcFS(format!("Could not read '/proc': {}", e)))?;
 
             for entry in proc_dir {
-                let path = entry.map_err(|_| "Couldn't get /proc/ filename")?.path();
+                let path = entry.map_err(|_| LibProcError::CantReadProcFS("Couldn't get /proc/ filename".into()))?.path();
                 let filename = path.file_name();
                 if let Some(name) = filename {
                     if let Some(n) = name.to_str() {
@@ -242,21 +257,21 @@ pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>, String> {
 
             Ok(pids)
         }
-        _ => Err("Unsupported ProcType".to_owned())
+        _ => Err(LibProcError::UnsupportedProcType)
     }
 }
 
 /// Search through the current processes looking for open file references which match
 /// a specified path or volume.
 #[cfg(target_os = "macos")]
-pub fn listpidspath(proc_types: ProcType, path: &str) -> Result<Vec<u32>, String> {
-    let c_path = CString::new(path).map_err(|_| "CString::new failed".to_string())?;
+pub fn listpidspath(proc_types: ProcType, path: &str) -> Result<Vec<u32>> {
+    let c_path = CString::new(path).with_context(|| "Can't create CString")?;
 
     let buffer_size = unsafe {
         proc_listpidspath(proc_types as u32, 0, c_path.as_ptr() as * const c_char, 0, ptr::null_mut(), 0)
     };
     if buffer_size <= 0 {
-        return Err(helpers::get_errno_with_message(buffer_size));
+        return Err(errno().into());
     }
 
     let capacity = buffer_size as usize / mem::size_of::<u32>();
@@ -275,7 +290,7 @@ pub fn listpidspath(proc_types: ProcType, path: &str) -> Result<Vec<u32>, String
     };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         let items_count = ret as usize / mem::size_of::<u32>() - 1;
         unsafe {
@@ -310,7 +325,7 @@ pub fn listpidspath(proc_types: ProcType, path: &str) -> Result<Vec<u32>, String
 /// };
 /// ```
 #[cfg(target_os = "macos")]
-pub fn pidinfo<T: PIDInfo>(pid: i32, arg: u64) -> Result<T, String> {
+pub fn pidinfo<T: PIDInfo>(pid: i32, arg: u64) -> Result<T> {
     let flavor = T::flavor() as i32;
     let buffer_size = mem::size_of::<T>() as i32;
     let mut pidinfo = unsafe { std::mem::zeroed() };
@@ -322,7 +337,7 @@ pub fn pidinfo<T: PIDInfo>(pid: i32, arg: u64) -> Result<T, String> {
     };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         Ok(pidinfo)
     }
@@ -330,7 +345,7 @@ pub fn pidinfo<T: PIDInfo>(pid: i32, arg: u64) -> Result<T, String> {
 
 /// pidinfo not implemented on linux - Pull Requests welcome - TODO
 #[cfg(not(target_os = "macos"))]
-pub fn pidinfo<T: PIDInfo>(_pid: i32, _arg: u64) -> Result<T, String> {
+pub fn pidinfo<T: PIDInfo>(_pid: i32, _arg: u64) -> Result<T> {
     unimplemented!()
 }
 
@@ -352,7 +367,7 @@ pub fn pidinfo<T: PIDInfo>(_pid: i32, _arg: u64) -> Result<T, String> {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn regionfilename(pid: i32, address: u64) -> Result<String, String> {
+pub fn regionfilename(pid: i32, address: u64) -> Result<String> {
     let mut buf: Vec<u8> = Vec::with_capacity((PROC_PIDPATHINFO_MAXSIZE - 1) as _);
     let buffer_ptr = buf.as_mut_ptr() as *mut c_void;
     let buffer_size = buf.capacity() as u32;
@@ -383,7 +398,7 @@ pub fn regionfilename(pid: i32, address: u64) -> Result<String, String> {
 /// }
 /// ```
 #[cfg(not(target_os = "macos"))]
-pub fn regionfilename(_pid: i32, _address: u64) -> Result<String, String> {
+pub fn regionfilename(_pid: i32, _address: u64) -> Result<String> {
     Err("'regionfilename' not implemented on linux".to_owned())
 }
 
@@ -400,7 +415,7 @@ pub fn regionfilename(_pid: i32, _address: u64) -> Result<String, String> {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn pidpath(pid: i32) -> Result<String, String> {
+pub fn pidpath(pid: i32) -> Result<String> {
     let mut buf: Vec<u8> = Vec::with_capacity((PROC_PIDPATHINFO_MAXSIZE - 1) as _);
     let buffer_ptr = buf.as_mut_ptr() as *mut c_void;
     let buffer_size = buf.capacity() as u32;
@@ -428,7 +443,7 @@ pub fn pidpath(pid: i32) -> Result<String, String> {
 /// }
 /// ```
 #[cfg(target_os = "linux")]
-pub fn pidpath(pid: i32) -> Result<String, String> {
+pub fn pidpath(pid: i32) -> Result<String> {
     let exe_path = CString::new(format!("/proc/{}/exe", pid))
         .map_err(|_| "Could not create CString")?;
     let mut buf: Vec<u8> = Vec::with_capacity(PATH_MAX as usize - 1);
@@ -455,7 +470,7 @@ pub fn pidpath(pid: i32) -> Result<String, String> {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn libversion() -> Result<(i32, i32), String> {
+pub fn libversion() -> Result<(i32, i32)> {
     let mut major = 0;
     let mut minor = 0;
     let ret: i32;
@@ -468,7 +483,7 @@ pub fn libversion() -> Result<(i32, i32), String> {
     if ret == 0 {
         Ok((major, minor))
     } else {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     }
 }
 
@@ -486,7 +501,7 @@ pub fn libversion() -> Result<(i32, i32), String> {
 /// }
 /// ```
 #[cfg(not(target_os = "macos"))]
-pub fn libversion() -> Result<(i32, i32), String> {
+pub fn libversion() -> Result<(i32, i32)> {
     Err("Linux does not use a library, so no library version number".to_owned())
 }
 
@@ -504,7 +519,7 @@ pub fn libversion() -> Result<(i32, i32), String> {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn name(pid: i32) -> Result<String, String> {
+pub fn name(pid: i32) -> Result<String> {
     let mut namebuf: Vec<u8> = Vec::with_capacity((PROC_PIDPATHINFO_MAXSIZE - 1) as _);
     let buffer_ptr = namebuf.as_ptr() as *mut c_void;
     let buffer_size = namebuf.capacity() as u32;
@@ -515,23 +530,20 @@ pub fn name(pid: i32) -> Result<String, String> {
     };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         unsafe {
             namebuf.set_len(ret as usize);
         }
 
-        match String::from_utf8(namebuf) {
-            Ok(name) => Ok(name),
-            Err(e) => Err(format!("Invalid UTF-8 sequence: {}", e))
-        }
+        String::from_utf8(namebuf).map_err(|e| e.into()).into()
     }
 }
 
 
 /// Get the name of a Process using it's Pid
 #[cfg(target_os = "linux")]
-pub fn name(pid: i32) -> Result<String, String> {
+pub fn name(pid: i32) -> Result<String> {
     helpers::procfile_field(&format!("/proc/{}/status", pid), "Name")
 }
 
@@ -561,7 +573,7 @@ pub fn name(pid: i32) -> Result<String, String> {
 /// }
 /// ```
 #[cfg(target_os = "macos")]
-pub fn listpidinfo<T: ListPIDInfo>(pid: i32, max_len: usize) -> Result<Vec<T::Item>, String> {
+pub fn listpidinfo<T: ListPIDInfo>(pid: i32, max_len: usize) -> Result<Vec<T::Item>> {
     let flavor = T::flavor() as i32;
     let buffer_size = mem::size_of::<T::Item>() as i32 * max_len as i32;
     let mut buffer = Vec::<T::Item>::with_capacity(max_len);
@@ -577,7 +589,7 @@ pub fn listpidinfo<T: ListPIDInfo>(pid: i32, max_len: usize) -> Result<Vec<T::It
     };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         let actual_len = ret as usize / mem::size_of::<T::Item>();
         buffer.truncate(actual_len);
@@ -587,7 +599,7 @@ pub fn listpidinfo<T: ListPIDInfo>(pid: i32, max_len: usize) -> Result<Vec<T::It
 
 /// listpidinfo is not implemented on Linux - Pull Requests welcome - TODO
 #[cfg(not(target_os = "macos"))]
-pub fn listpidinfo<T: ListPIDInfo>(_pid: i32, _max_len: usize) -> Result<Vec<T::Item>, String> {
+pub fn listpidinfo<T: ListPIDInfo>(_pid: i32, _max_len: usize) -> Result<Vec<T::Item>> {
     unimplemented!()
 }
 
@@ -605,8 +617,8 @@ pub fn listpidinfo<T: ListPIDInfo>(_pid: i32, _max_len: usize) -> Result<Vec<T::
 ///     Err(err) => writeln!(&mut std::io::stderr(), "Error: {}", err).unwrap()
 /// }
 /// ```
-pub fn pidcwd(_pid: pid_t) -> Result<PathBuf, String> {
-    Err("pidcwd is not implemented for macos".into())
+pub fn pidcwd(_pid: pid_t) -> Result<PathBuf> {
+    Err(LibProcError::NotImplemented("pidcwd is not implemented for macos").into())
 }
 
 #[cfg(target_os = "linux")]
@@ -623,7 +635,7 @@ pub fn pidcwd(_pid: pid_t) -> Result<PathBuf, String> {
 ///     Err(err) => writeln!(&mut std::io::stderr(), "Error: {}", err).unwrap()
 /// }
 /// ```
-pub fn pidcwd(pid: pid_t) -> Result<PathBuf, String> {
+pub fn pidcwd(pid: pid_t) -> Result<PathBuf> {
     fs::read_link(format!("/proc/{}/cwd", pid)).map_err(|e| {
         e.to_string()
     })
@@ -644,8 +656,8 @@ pub fn pidcwd(pid: pid_t) -> Result<PathBuf, String> {
 ///     Err(err) => writeln!(&mut std::io::stderr(), "Error: {}", err).unwrap()
 /// }
 /// ```
-pub fn cwdself() -> Result<PathBuf, String> {
-    env::current_dir().map_err(|e| e.to_string())
+pub fn cwdself() -> Result<PathBuf> {
+    env::current_dir().map_err(|e| LibProcError::GenericError(e.to_string()).into())
 }
 
 /// Determine if the current user ID of this process is root
