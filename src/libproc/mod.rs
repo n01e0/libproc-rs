@@ -35,4 +35,7 @@ pub mod net_info;
 #[cfg(target_os="macos")]
 pub mod fileport;
 
+/// Error definition
+pub mod error;
+
 mod helpers;
