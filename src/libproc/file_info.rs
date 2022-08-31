@@ -1,8 +1,9 @@
 extern crate libc;
 
 use std::mem;
+use anyhow::Result;
 
-use crate::libproc::helpers;
+use crate::errno::errno;
 use crate::libproc::proc_pid::{ListPIDInfo, PidInfoFlavor};
 use crate::libproc::net_info::{ProcFileInfo, VInfoStat};
 
@@ -225,7 +226,7 @@ pub trait PIDFDInfo: Default {
 /// ```
 ///
 #[cfg(target_os = "macos")]
-pub fn pidfdinfo<T: PIDFDInfo>(pid: i32, fd: i32) -> Result<T, String> {
+pub fn pidfdinfo<T: PIDFDInfo>(pid: i32, fd: i32) -> Result<T> {
     let flavor = T::flavor() as i32;
     let buffer_size = mem::size_of::<T>() as i32;
     let mut pidinfo = T::default();
@@ -237,14 +238,14 @@ pub fn pidfdinfo<T: PIDFDInfo>(pid: i32, fd: i32) -> Result<T, String> {
     };
 
     if ret <= 0 {
-        Err(helpers::get_errno_with_message(ret))
+        Err(errno().into())
     } else {
         Ok(pidinfo)
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn pidfdinfo<T: PIDFDInfo>(_pid: i32, _fd: i32) -> Result<T, String> {
+pub fn pidfdinfo<T: PIDFDInfo>(_pid: i32, _fd: i32) -> Result<T> {
     unimplemented!()
 }
 
