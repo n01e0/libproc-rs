@@ -691,6 +691,7 @@ mod test {
     #[cfg(target_os = "linux")]
     use std::process;
     use std::env;
+    use errno::Errno;
 
     #[cfg(target_os = "macos")]
     use crate::libproc::bsd_info::BSDInfo;
@@ -714,6 +715,7 @@ mod test {
     use crate::libproc::thread_info::ThreadInfo;
     #[cfg(target_os = "macos")]
     use crate::libproc::work_queue_info::WorkQueueInfo;
+    use crate::libproc::error::LibProcError;
 
     #[cfg(target_os = "macos")]
     #[test]
@@ -831,14 +833,9 @@ mod test {
     #[test]
     // This checks that it cannot find the path of the process with pid -1 and returns correct error message
     fn pidpath_test_unknown_pid_test() {
-        #[cfg(target_os = "macos")]
-            let error_message = "No such process";
-        #[cfg(target_os = "linux")]
-            let error_message = "No such file or directory";
-
         match pidpath(-1) {
             Ok(path) => panic!("It found the path of process with ID = -1 (path = {}), that's not possible\n", path),
-            Err(message) => assert!(message.contains(error_message)),
+            Err(e) => assert!(matches!(e.downcast_ref::<LibProcError>(), Some(LibProcError::OSError(Errno(-1))))),
         }
     }
 

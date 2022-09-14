@@ -4,7 +4,7 @@ use std::convert::From;
 use std::string::FromUtf8Error;
 
 /// libproc error type
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Eq, PartialEq)]
 pub enum LibProcError {
     /// OS error
     #[error("OS Error `{0:?}`")]
