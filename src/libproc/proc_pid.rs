@@ -1,6 +1,7 @@
 extern crate libc;
 
 use std::env;
+#[cfg(target_os = "macos")]
 use crate::errno::errno;
 use super::error::LibProcError;
 use anyhow::{Context, Result};

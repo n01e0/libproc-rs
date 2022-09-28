@@ -24,9 +24,12 @@ pub enum LibProcError {
     /// UTF-8 error
     #[error("Invalid UTF-8 sequence: `{0}`")]
     InvalidUTF8(FromUtf8Error),
-    #[error("Could not find the field named '`{0}`' in the /proc FS file name '`{1}`'")]
     /// Could not find procfs field
+    #[error("Could not find the field named '`{0}`' in the /proc FS file name '`{1}`'")]
     CouldNotFoundProc(String, String),
+    /// Cloud not parse memory (unit) string
+    #[error("Could not parse Memory String: `{0}`")]
+    CouldNotParseMemoryString(String),
 }
 
 /// LibProcError from Errno

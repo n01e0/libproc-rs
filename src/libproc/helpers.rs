@@ -1,6 +1,6 @@
 use crate::errno::errno;
 use crate::libproc::error::LibProcError;
-use anyhow::Result;
+use anyhow::{Context, Result};
 #[cfg(target_os = "linux")]
 use std::fs::File;
 #[cfg(target_os = "linux")]
@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader};
 
 /// Helper function to get errno and return a String with the passed in return_code, the error
 /// number and a possible message
+#[cfg(target_os = "macos")]
 pub fn get_errno_with_message(return_code: i32) -> String {
     let e = errno();
     let code = e.0 as i32;
@@ -37,42 +38,41 @@ pub fn procfile_field(filename: &str, field_name: &str) -> Result<String> {
     let line_header = format!("{}{}", field_name, SEPARATOR);
 
     // Open the file in read-only mode (ignoring errors).
-    let file = File::open(filename).map_err(|_| format!("Could not open /proc file '{}'", filename))?;
+    let file = File::open(filename).with_context(|| format!("Could not open /proc file '{}'", filename))?;
     let reader = BufReader::new(file);
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for line in reader.lines() {
-        let line = line.map_err(|_| "Could not read file contents")?;
+        let line = line.with_context(|| "Could not read file contents")?;
         if line.starts_with(&line_header) {
             let parts: Vec<&str> = line.split(SEPARATOR).collect();
             return Ok(parts[1].trim().to_owned());
         }
     }
 
-    Err(LibProcError::CouldNotFoundProc(field_name, filename))
+    Err(LibProcError::CouldNotFoundProc(field_name.into(), filename.into()).into())
 }
 
 #[cfg(target_os = "linux")]
 /// Parse a memory amount string into integer number of bytes
 /// e.g. 220844 kB -->
-pub fn parse_memory_string(line: &str) -> Result<u64, String> {
+pub fn parse_memory_string(line: &str) -> Result<u64> {
     let parts: Vec<&str> = line.trim().split(' ').collect();
     if parts.is_empty() {
-        return Err(format!("Could not parse Memory String: {}", line))
+        return Err(LibProcError::CouldNotParseMemoryString(line.into()).into())
     }
     let multiplier: u64 = if parts.len() == 2 {
         match parts[1] {
             "MB" => 1024 * 1024,
             "kB" => 1024,
             "B" => 1,
-            _ => return Err(format!("Could not parse units of Memory String: {}", line))
+            _ => return Err(LibProcError::CouldNotParseMemoryString(line.into()).into())
         }
     } else {
         1
     };
 
-    let value:u64 = parts[0].parse()
-        .map_err(|_| "Could not parse value as integer")?;
+    let value:u64 = parts[0].parse().map_err(|_| LibProcError::CouldNotParseMemoryString(line.into()))?;
 
     Ok(value * multiplier)
 }
@@ -88,12 +88,16 @@ mod test {
 
         #[test]
         fn test_valid_memory_string() {
-            assert_eq!(parse_memory_string("220844 kB"), Ok(226144256));
+            let res = parse_memory_string("220844 kB");
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap(), 226144256);
         }
 
         #[test]
         fn test_valid_memory_string_spaces() {
-            assert_eq!(parse_memory_string("  220844 kB  "), Ok(226144256));
+            let res = parse_memory_string("  220844 kB  ");
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap(), 226144256);
         }
 
         #[test]

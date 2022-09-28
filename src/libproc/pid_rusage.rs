@@ -1,5 +1,7 @@
 extern crate libc;
 
+use anyhow::{Result, Context};
+
 #[cfg(target_os = "macos")]
 use crate::libproc::helpers;
 
@@ -405,10 +407,10 @@ pub fn pidrusage<T: PIDRUsage>(pid : i32) -> Result<T, String> {
 ///     }
 /// }
 /// ```
-pub fn pidrusage<T: PIDRUsage>(pid : i32) -> Result<T, String> {
+pub fn pidrusage<T: PIDRUsage>(pid : i32) -> Result<T> {
     let mut pidrusage = T::default();
     let vm_size = procfile_field(&format!("/proc/{}/status", pid), "VmSize")?;
-    pidrusage.set_memory_used(parse_memory_string(&vm_size)?);
+    pidrusage.set_memory_used(parse_memory_string(&vm_size).with_context(|| "Can't set memory used")?);
 
     Ok(pidrusage)
 }
