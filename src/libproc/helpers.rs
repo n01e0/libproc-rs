@@ -1,4 +1,5 @@
 use crate::errno::errno;
+use crate::libproc::error::LibProcError;
 use anyhow::Result;
 #[cfg(target_os = "linux")]
 use std::fs::File;
@@ -31,7 +32,7 @@ pub fn check_errno(ret: i32, buf: &mut Vec<u8>) -> Result<String> {
 #[cfg(target_os = "linux")]
 /// A helper function for finding named fields in specific /proc FS files for processes
 /// This will be more useful when implementing more linux functions
-pub fn procfile_field(filename: &str, field_name: &str) -> Result<String, String> {
+pub fn procfile_field(filename: &str, field_name: &str) -> Result<String> {
     const SEPARATOR: &str = ":";
     let line_header = format!("{}{}", field_name, SEPARATOR);
 
@@ -48,7 +49,7 @@ pub fn procfile_field(filename: &str, field_name: &str) -> Result<String, String
         }
     }
 
-    Err(format!("Could not find the field named '{}' in the /proc FS file name '{}'", field_name, filename))
+    Err(LibProcError::CouldNotFoundProc(field_name, filename))
 }
 
 #[cfg(target_os = "linux")]

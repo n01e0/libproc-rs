@@ -257,7 +257,7 @@ pub fn listpids(proc_types: ProcType) -> Result<Vec<u32>> {
 
             Ok(pids)
         }
-        _ => Err(LibProcError::UnsupportedProcType)
+        _ => Err(LibProcError::UnsupportedProcType.into())
     }
 }
 
@@ -399,7 +399,7 @@ pub fn regionfilename(pid: i32, address: u64) -> Result<String> {
 /// ```
 #[cfg(not(target_os = "macos"))]
 pub fn regionfilename(_pid: i32, _address: u64) -> Result<String> {
-    Err("'regionfilename' not implemented on linux".to_owned())
+    Err(LibProcError::NotImplemented("'regionfilename' not implemented on linux").into())
 }
 
 /// Get the path of the executable file being run for a process
@@ -445,7 +445,7 @@ pub fn pidpath(pid: i32) -> Result<String> {
 #[cfg(target_os = "linux")]
 pub fn pidpath(pid: i32) -> Result<String> {
     let exe_path = CString::new(format!("/proc/{}/exe", pid))
-        .map_err(|_| "Could not create CString")?;
+        .with_context(|| "Could not create CString")?;
     let mut buf: Vec<u8> = Vec::with_capacity(PATH_MAX as usize - 1);
     let buffer_ptr = buf.as_mut_ptr() as *mut c_char;
     let buffer_size = buf.capacity();
@@ -502,7 +502,7 @@ pub fn libversion() -> Result<(i32, i32)> {
 /// ```
 #[cfg(not(target_os = "macos"))]
 pub fn libversion() -> Result<(i32, i32)> {
-    Err("Linux does not use a library, so no library version number".to_owned())
+    Err(LibProcError::NotImplemented("Linux does not use a library, so no library version number").into())
 }
 
 /// Get the name of a process
@@ -636,9 +636,7 @@ pub fn pidcwd(_pid: pid_t) -> Result<PathBuf> {
 /// }
 /// ```
 pub fn pidcwd(pid: pid_t) -> Result<PathBuf> {
-    fs::read_link(format!("/proc/{}/cwd", pid)).map_err(|e| {
-        e.to_string()
-    })
+    fs::read_link(format!("/proc/{}/cwd", pid)).with_context(|| "Can't read link")
 }
 
 /// Gets path of current working directory for the current process.

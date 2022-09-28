@@ -23,7 +23,10 @@ pub enum LibProcError {
     NotImplemented(&'static str),
     /// UTF-8 error
     #[error("Invalid UTF-8 sequence: `{0}`")]
-    InvalidUTF8(FromUtf8Error)
+    InvalidUTF8(FromUtf8Error),
+    #[error("Could not find the field named '`{0}`' in the /proc FS file name '`{1}`'")]
+    /// Could not find procfs field
+    CouldNotFoundProc(String, String),
 }
 
 /// LibProcError from Errno
