@@ -834,7 +834,7 @@ mod test {
     fn pidpath_test_unknown_pid_test() {
         match pidpath(-1) {
             Ok(path) => panic!("It found the path of process with ID = -1 (path = {}), that's not possible\n", path),
-            Err(e) => assert!(matches!(e.downcast_ref::<LibProcError>(), Some(LibProcError::OSError(Errno(-1))))),
+            Err(e) => assert!(matches!(e.downcast::<LibProcError>().unwrap(), LibProcError::OSError(Errno(2)))),
         }
     }
 

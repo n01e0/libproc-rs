@@ -20,13 +20,13 @@ pub fn get_errno_with_message(return_code: i32) -> String {
 /// - is positive, take `ret` as the length of the success message in `buf` in bytes
 pub fn check_errno(ret: i32, buf: &mut Vec<u8>) -> Result<String> {
     if ret <= 0 {
-        Err(errno().into())
+        Err(LibProcError::OSError(errno()).into())
     } else {
         unsafe {
             buf.set_len(ret as usize);
         }
 
-        String::from_utf8(buf.to_vec()).map_err(|e| e.into())
+        String::from_utf8(buf.to_vec()).map_err(|e| LibProcError::InvalidUTF8(e).into())
     }
 }
 
@@ -85,12 +85,15 @@ mod test {
     #[cfg(target_os = "linux")]
     mod linux {
         use crate::libproc::helpers::parse_memory_string;
+        use anyhow::Result;
 
         #[test]
-        fn test_valid_memory_string() {
+        fn test_valid_memory_string() -> Result<()> {
             let res = parse_memory_string("220844 kB");
             assert!(res.is_ok());
             assert_eq!(res.unwrap(), 226144256);
+            assert_eq!(parse_memory_string("220844 kB")?, 226144256);
+            Ok(())
         }
 
         #[test]
@@ -122,7 +125,7 @@ mod test {
 
         // Test
         if let Err(e) = check_errno(buf.len() as i32, &mut buf) {
-            assert!(matches!(e.downcast::<LibProcError>().unwrap(), LibProcError::OSError(Errno(1))));
+            assert!(matches!(e.downcast::<LibProcError>().unwrap(), LibProcError::InvalidUTF8(_)));
         }
     }
 
