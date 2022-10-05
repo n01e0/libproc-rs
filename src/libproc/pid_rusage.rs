@@ -1,6 +1,6 @@
 extern crate libc;
 
-use anyhow::{Result, Context};
+use anyhow::Result;
 
 #[cfg(target_os = "macos")]
 use crate::libproc::helpers;

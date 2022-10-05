@@ -1,6 +1,6 @@
 use crate::errno::errno;
 use crate::libproc::error::LibProcError;
-use anyhow::{Context, Result};
+use anyhow::Result;
 #[cfg(target_os = "linux")]
 use std::fs::File;
 #[cfg(target_os = "linux")]
