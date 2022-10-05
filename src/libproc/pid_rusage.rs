@@ -1,5 +1,7 @@
 extern crate libc;
 
+#[cfg(target_os = "linux")]
+use anyhow::Context;
 use anyhow::Result;
 
 #[cfg(target_os = "macos")]
